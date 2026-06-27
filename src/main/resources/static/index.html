@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DevOps Training Lab 1</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0a0e1a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+    .lab-badge {
+      background: #1e3a5f;
+      color: #60a5fa;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 6px 20px;
+      border-radius: 20px;
+      border: 1px solid #2a4a7a;
+      margin-bottom: 1.5rem;
+    }
+    h1 {
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      font-weight: 900;
+      text-align: center;
+      background: linear-gradient(135deg, #60a5fa, #3b82f6, #1d4ed8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.5rem;
+      letter-spacing: -1px;
+    }
+    .subtitle {
+      color: #64748b;
+      text-align: center;
+      font-size: 1rem;
+      margin-bottom: 3rem;
+    }
+    .stack-info {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 2.5rem;
+    }
+    .chip {
+      background: #1e2435;
+      border: 1px solid #2a3045;
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .chip.java { color: #fb923c; border-color: #7c3c10; }
+    .chip.maven { color: #c084fc; border-color: #4a2060; }
+    .chip.spring { color: #4ade80; border-color: #14401e; }
+    .chip.pg { color: #38bdf8; border-color: #0c3a5a; }
+    .chip.docker { color: #60a5fa; border-color: #1e3a5f; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      width: 100%;
+      max-width: 900px;
+      margin-bottom: 2rem;
+    }
+    .card {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 14px;
+      padding: 1.5rem;
+      transition: border-color 0.3s;
+    }
+    .card:hover { border-color: #374151; }
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 1.2rem;
+    }
+    .card-icon {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem;
+    }
+    .icon-app { background: #1e3a5f; }
+    .icon-db  { background: #14401e; }
+    .icon-sys { background: #2e1a4a; }
+    .card-title { font-weight: 700; font-size: 1rem; }
+    .card-sub   { font-size: 12px; color: #64748b; margin-top: 2px; }
+
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #1f2937;
+    }
+    .status-row:last-child { border-bottom: none; }
+    .status-key   { font-size: 13px; color: #94a3b8; }
+    .status-val   { font-size: 13px; font-weight: 600; max-width: 55%; text-align: right; word-break: break-all; }
+    .status-badge {
+      font-size: 12px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-weight: 700;
+    }
+    .badge-online  { background: #14401e; color: #4ade80; }
+    .badge-offline { background: #3a1010; color: #f87171; }
+    .badge-loading { background: #2a1a00; color: #fbbf24; }
+
+    .refresh-btn {
+      background: #1e3a5f;
+      color: #60a5fa;
+      border: 1px solid #2a4a7a;
+      padding: 10px 28px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.2s;
+      margin-top: 1rem;
+    }
+    .refresh-btn:hover { background: #2a4a7a; transform: translateY(-1px); }
+    .refresh-btn:active { transform: translateY(0); }
+
+    .footer {
+      margin-top: 3rem;
+      color: #374151;
+      font-size: 12px;
+      text-align: center;
+    }
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid #374151;
+      border-top-color: #60a5fa;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .pulse { animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  </style>
+</head>
+<body>
+
+  <div class="lab-badge">🐳 Docker Training Series</div>
+  <h1>DevOps Training Lab 1</h1>
+  <p class="subtitle">Java Spring Boot + Maven · 3-Tier Application Status</p>
+
+  <div class="stack-info">
+    <span class="chip java">☕ Java 17</span>
+    <span class="chip maven">⚙️ Maven</span>
+    <span class="chip spring">🍃 Spring Boot 3</span>
+    <span class="chip pg">🐘 PostgreSQL</span>
+    <span class="chip docker">🐳 Docker</span>
+  </div>
+
+  <div class="grid">
+    <!-- Frontend Card -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon icon-app">🖥️</div>
+        <div>
+          <div class="card-title">Frontend</div>
+          <div class="card-sub">Static HTML served by Spring Boot</div>
+        </div>
+      </div>
+      <div class="status-row">
+        <span class="status-key">Status</span>
+        <span class="status-badge badge-online">✅ ONLINE</span>
+      </div>
+      <div class="status-row">
+        <span class="status-key">Type</span>
+        <span class="status-val">Static HTML/CSS/JS</span>
+      </div>
+      <div class="status-row">
+        <span class="status-key">Port</span>
+        <span class="status-val">8080</span>
+      </div>
+    </div>
+
+    <!-- Backend Card -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon icon-app">⚙️</div>
+        <div>
+          <div class="card-title">Backend</div>
+          <div class="card-sub">Spring Boot REST API</div>
+        </div>
+      </div>
+      <div id="backend-status">
+        <div class="status-row">
+          <span class="status-key">Status</span>
+          <span class="status-badge badge-loading pulse"><span class="spinner"></span>Loading…</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Database Card -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon icon-db">🗄️</div>
+        <div>
+          <div class="card-title">Database</div>
+          <div class="card-sub">PostgreSQL Connection</div>
+        </div>
+      </div>
+      <div id="db-status">
+        <div class="status-row">
+          <span class="status-key">Status</span>
+          <span class="status-badge badge-loading pulse"><span class="spinner"></span>Loading…</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- System Info Card -->
+  <div style="width:100%;max-width:900px;">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon icon-sys">📋</div>
+        <div>
+          <div class="card-title">System Info</div>
+          <div class="card-sub">Live data from container</div>
+        </div>
+      </div>
+      <div id="sys-info" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 2rem;">
+        <div class="status-row pulse"><span class="status-key">Fetching…</span></div>
+      </div>
+    </div>
+  </div>
+
+  <button class="refresh-btn" onclick="fetchStatus()">🔄 Refresh Status</button>
+
+  <div class="footer">
+    DevOps Training Series · Lab 1 of 5 · Java Spring Boot + Maven + PostgreSQL + Docker
+  </div>
+
+<script>
+  async function fetchStatus() {
+    try {
+      const res = await fetch('/api/status');
+      const data = await res.json();
+
+      // Backend
+      document.getElementById('backend-status').innerHTML = `
+        <div class="status-row">
+          <span class="status-key">Status</span>
+          <span class="status-badge badge-online">${data.backendStatus}</span>
+        </div>
+        <div class="status-row">
+          <span class="status-key">Hostname</span>
+          <span class="status-val">${data.hostname}</span>
+        </div>
+        <div class="status-row">
+          <span class="status-key">Java Version</span>
+          <span class="status-val">${data.javaVersion}</span>
+        </div>
+        <div class="status-row">
+          <span class="status-key">Timestamp</span>
+          <span class="status-val">${data.timestamp.replace('T',' ')}</span>
+        </div>
+      `;
+
+      // Database
+      const dbOnline = data.dbStatus && data.dbStatus.includes('CONNECTED');
+      document.getElementById('db-status').innerHTML = `
+        <div class="status-row">
+          <span class="status-key">Status</span>
+          <span class="status-badge ${dbOnline ? 'badge-online' : 'badge-offline'}">${data.dbStatus}</span>
+        </div>
+        ${dbOnline ? `
+        <div class="status-row">
+          <span class="status-key">Version</span>
+          <span class="status-val">${data.dbVersion}</span>
+        </div>
+        <div class="status-row">
+          <span class="status-key">Latency</span>
+          <span class="status-val">${data.dbLatencyMs}ms</span>
+        </div>` : `
+        <div class="status-row">
+          <span class="status-key">Error</span>
+          <span class="status-val" style="color:#f87171">${data.dbError || 'Connection failed'}</span>
+        </div>`}
+      `;
+
+      // System
+      document.getElementById('sys-info').innerHTML = `
+        <div class="status-row">
+          <span class="status-key">App Name</span>
+          <span class="status-val">${data.appName}</span>
+        </div>
+        <div class="status-row">
+          <span class="status-key">Stack</span>
+          <span class="status-val">${data.stack}</span>
+        </div>
+        <div class="status-row">
+          <span class="status-key">Lab</span>
+          <span class="status-val">${data.lab}</span>
+        </div>
+      `;
+
+    } catch (err) {
+      document.getElementById('backend-status').innerHTML = `
+        <div class="status-row">
+          <span class="status-key">Status</span>
+          <span class="status-badge badge-offline">❌ ERROR</span>
+        </div>
+        <div class="status-row">
+          <span class="status-key">Message</span>
+          <span class="status-val" style="color:#f87171">${err.message}</span>
+        </div>
+      `;
+    }
+  }
+
+  // Auto-fetch on load
+  fetchStatus();
+  // Refresh every 30s
+  setInterval(fetchStatus, 30000);
+</script>
+</body>
+</html>

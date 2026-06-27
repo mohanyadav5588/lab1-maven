@@ -1,0 +1,11 @@
+target/
+*.class
+*.jar
+.git/
+.gitignore
+.idea/
+*.iml
+*.iws
+.DS_Store
+README.md
+docker-compose*.yml

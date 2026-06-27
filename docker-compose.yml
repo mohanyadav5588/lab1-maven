@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: lab1-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: devopslab
+      POSTGRES_USER: labuser
+      POSTGRES_PASSWORD: labpass123
+    volumes:
+      - lab1_pgdata:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - lab1_backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U labuser -d devopslab"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # DB stays internal — not exposed to host on purpose
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lab1-java-maven:1.0
+    container_name: lab1-app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/devopslab
+      DB_USER: labuser
+      DB_PASSWORD: labpass123
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - lab1_backend
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+networks:
+  lab1_backend:
+    driver: bridge
+
+volumes:
+  lab1_pgdata:
