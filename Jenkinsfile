@@ -8,6 +8,10 @@ pipeline {
         DOCKER_CREDS  = "dockerhub-credentials" // Jenkins credentials ID, if pushing
         COMPOSE_FILE  = "docker-compose.yml"
     }
+    
+    triggers {
+        githubPush()
+    }
 
     options {
         buildDiscarder(logRotator(numToKeepStr: '10'))
