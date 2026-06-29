@@ -2,19 +2,12 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME    = "lab1-java-maven"
-        IMAGE_TAG     = "${env.BUILD_NUMBER}"
-        REGISTRY      = "" // e.g. "docker.io/yourusername" — leave blank to skip push
-        DOCKER_CREDS  = "dockerhub-credentials" // Jenkins credentials ID, if pushing
-        COMPOSE_FILE  = "docker-compose.yml"
-    }
-    
-    triggers {
-        githubPush()
+        IMAGE_NAME = "lab1-java-maven"
+        IMAGE_TAG  = "1.0"
+        COMPOSE_PROJECT_DIR = "."
     }
 
     options {
-        buildDiscarder(logRotator(numToKeepStr: '10'))
         timestamps()
         disableConcurrentBuilds()
     }
@@ -27,114 +20,89 @@ pipeline {
             }
         }
 
-        stage('Build (Maven)') {
-            agent {
-                docker {
-                    image 'maven:3.9-eclipse-temurin-17'
-                    args '-v $HOME/.m2:/root/.m2'
-                }
-            }
+        stage('Build Maven App') {
             steps {
-                sh 'mvn -B -q clean compile'
+                sh '''
+                    mvn clean package -DskipTests
+                '''
             }
         }
 
-        stage('Unit Tests') {
-            agent {
-                docker {
-                    image 'maven:3.9-eclipse-temurin-17'
-                    args '-v $HOME/.m2:/root/.m2'
-                }
-            }
+        stage('Run Unit Tests') {
             steps {
-                sh 'mvn -B test'
+                sh '''
+                    mvn test
+                '''
             }
             post {
                 always {
-                    junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
+                    junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
                 }
-            }
-        }
-
-        stage('Package Jar') {
-            agent {
-                docker {
-                    image 'maven:3.9-eclipse-temurin-17'
-                    args '-v $HOME/.m2:/root/.m2'
-                }
-            }
-            steps {
-                sh 'mvn -B -q package -DskipTests'
-                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -t ${IMAGE_NAME}:latest ."
+                sh '''
+                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                '''
             }
         }
 
-        stage('Integration Test (Compose)') {
+        stage('Stop Existing Containers') {
             steps {
-                sh """
-                    docker compose -f ${COMPOSE_FILE} down -v || true
-                    docker compose -f ${COMPOSE_FILE} up -d --build
-                """
-                script {
-                    sh '''
-                        echo "Waiting for app health check..."
-                        for i in $(seq 1 20); do
-                          STATUS=$(docker inspect --format='{{.State.Health.Status}}' lab1-app 2>/dev/null || echo "starting")
-                          if [ "$STATUS" = "healthy" ]; then
-                            echo "App is healthy"
-                            exit 0
-                          fi
-                          sleep 5
-                        done
-                        echo "App did not become healthy in time"
-                        docker compose -f docker-compose.yml logs app
+                sh '''
+                    docker compose down || true
+                '''
+            }
+        }
+
+        stage('Deploy with Docker Compose') {
+            steps {
+                sh '''
+                    docker compose up -d
+                '''
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                sh '''
+                    echo "Waiting for containers to report healthy..."
+                    for i in $(seq 1 15); do
+                        APP_STATUS=$(docker inspect -f '{{.State.Health.Status}}' lab1-app 2>/dev/null || echo "starting")
+                        DB_STATUS=$(docker inspect -f '{{.State.Health.Status}}' lab1-db 2>/dev/null || echo "starting")
+                        echo "app=$APP_STATUS db=$DB_STATUS"
+                        if [ "$APP_STATUS" = "healthy" ] && [ "$DB_STATUS" = "healthy" ]; then
+                            echo "Both containers healthy."
+                            break
+                        fi
+                        sleep 5
+                    done
+
+                    docker compose ps
+
+                    if [ "$APP_STATUS" != "healthy" ] || [ "$DB_STATUS" != "healthy" ]; then
+                        echo "Containers did not become healthy in time."
                         exit 1
-                    '''
-                }
-                sh 'curl -f http://localhost:8080/api/status'
-            }
-            post {
-                always {
-                    sh "docker compose -f ${COMPOSE_FILE} down -v || true"
-                }
-            }
-        }
+                    fi
 
-        stage('Push Image') {
-            when {
-                expression { return env.REGISTRY?.trim() }
-            }
-            steps {
-                withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDS}",
-                                                   usernameVariable: 'DOCKER_USER',
-                                                   passwordVariable: 'DOCKER_PASS')]) {
-                    sh """
-                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-                        docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
-                        docker tag ${IMAGE_NAME}:latest ${REGISTRY}/${IMAGE_NAME}:latest
-                        docker push ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
-                        docker push ${REGISTRY}/${IMAGE_NAME}:latest
-                    """
-                }
+                    curl -sf http://localhost:8080/api/health || (echo "Health check failed" && exit 1)
+                '''
             }
         }
     }
 
     post {
         success {
-            echo "✅ Pipeline succeeded — image ${IMAGE_NAME}:${IMAGE_TAG} built and verified."
+            echo "Build and deployment completed successfully."
         }
         failure {
-            echo "❌ Pipeline failed. Check stage logs above."
+            echo "Build or deployment failed. Dumping logs..."
+            sh 'docker compose logs --tail=100 || true'
         }
         always {
-            sh 'docker system prune -f || true'
+            sh 'docker image prune -f || true'
         }
     }
 }
