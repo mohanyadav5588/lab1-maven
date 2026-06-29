@@ -2,14 +2,16 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "lab1-java-maven"
-        IMAGE_TAG  = "1.0"
-        COMPOSE_PROJECT_DIR = "."
+        APP_NAME    = "lab1-status-app"
+        IMAGE_NAME  = "lab1-java-maven"
+        IMAGE_TAG   = "1.0"
+        HEALTH_URL  = "http://localhost:8080/api/health"
     }
 
     options {
         timestamps()
         disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
     }
 
     stages {
@@ -20,19 +22,15 @@ pipeline {
             }
         }
 
-        stage('Build Maven App') {
+        stage('Maven Build') {
             steps {
-                sh '''
-                    mvn clean package -DskipTests
-                '''
+                sh 'mvn clean package -DskipTests -B'
             }
         }
 
-        stage('Run Unit Tests') {
+        stage('Maven Test') {
             steps {
-                sh '''
-                    mvn test
-                '''
+                sh 'mvn test -B'
             }
             post {
                 always {
@@ -43,62 +41,59 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh '''
-                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
-                '''
+                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
             }
         }
 
-        stage('Stop Existing Containers') {
+        stage('Stop Existing Stack') {
             steps {
-                sh '''
-                    docker compose down || true
-                '''
+                sh 'docker compose down || true'
             }
         }
 
-        stage('Deploy with Docker Compose') {
+        stage('Deploy Stack') {
             steps {
-                sh '''
-                    docker compose up -d
-                '''
+                sh 'docker compose up -d'
             }
         }
 
-        stage('Verify Deployment') {
+        stage('Wait for Healthy Containers') {
             steps {
                 sh '''
-                    echo "Waiting for containers to report healthy..."
+                    echo "Waiting for lab1-db and lab1-app to report healthy..."
                     for i in $(seq 1 15); do
-                        APP_STATUS=$(docker inspect -f '{{.State.Health.Status}}' lab1-app 2>/dev/null || echo "starting")
                         DB_STATUS=$(docker inspect -f '{{.State.Health.Status}}' lab1-db 2>/dev/null || echo "starting")
-                        echo "app=$APP_STATUS db=$DB_STATUS"
-                        if [ "$APP_STATUS" = "healthy" ] && [ "$DB_STATUS" = "healthy" ]; then
+                        APP_STATUS=$(docker inspect -f '{{.State.Health.Status}}' lab1-app 2>/dev/null || echo "starting")
+                        echo "db=$DB_STATUS app=$APP_STATUS"
+
+                        if [ "$DB_STATUS" = "healthy" ] && [ "$APP_STATUS" = "healthy" ]; then
                             echo "Both containers healthy."
-                            break
+                            exit 0
                         fi
                         sleep 5
                     done
 
-                    docker compose ps
-
-                    if [ "$APP_STATUS" != "healthy" ] || [ "$DB_STATUS" != "healthy" ]; then
-                        echo "Containers did not become healthy in time."
-                        exit 1
-                    fi
-
-                    curl -sf http://localhost:8080/api/health || (echo "Health check failed" && exit 1)
+                    echo "Containers did not become healthy in time."
+                    docker compose logs --tail=50
+                    exit 1
                 '''
+            }
+        }
+
+        stage('Smoke Test') {
+            steps {
+                sh "curl -sf ${HEALTH_URL} || (echo 'Health check failed' && exit 1)"
             }
         }
     }
 
     post {
         success {
-            echo "Build and deployment completed successfully."
+            echo "${APP_NAME} built and deployed successfully (image: ${IMAGE_NAME}:${IMAGE_TAG})."
         }
         failure {
-            echo "Build or deployment failed. Dumping logs..."
+            echo "Pipeline failed — dumping container logs for diagnosis."
+            sh 'docker compose ps || true'
             sh 'docker compose logs --tail=100 || true'
         }
         always {
